@@ -1,8 +1,10 @@
+using Devinci.Config;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.IdentityModel.Tokens.Jwt;
-using Devinci.Config;
+using static System.Net.WebRequestMethods;
 
 namespace Devinci
 {
@@ -34,14 +36,12 @@ namespace Devinci
 
 		private void btnGetToken_Click(object sender, EventArgs e)
 		{
-			if (cmbClientApps.SelectedIndex == -1)
-			{
+			if (cmbClientApps.SelectedIndex == -1) {
 				MessageBox.Show("No app client selected.");
 				return;
 			}
 
-			if (cmbResourceApps.SelectedIndex == -1)
-			{
+			if (cmbResourceApps.SelectedIndex == -1) {
 				MessageBox.Show("No API selected.");
 				return;
 			}
@@ -52,11 +52,10 @@ namespace Devinci
 			var clientApp = _appConfig.ClientApps[cmbClientApps.SelectedIndex];
 			var resourceApp = _appConfig.ResourceApps[cmbResourceApps.SelectedIndex];
 
-			this.BeginInvoke(new Action(async () =>
-			{
+			this.BeginInvoke(new Action(async () => {
 				this.Cursor = Cursors.WaitCursor;
-				try
-				{
+
+				try {
 					using var httpClient = _httpClientFactory.CreateClient();
 
 					var request = new HttpRequestMessage(HttpMethod.Post, txtUrl.Text);
@@ -67,13 +66,22 @@ namespace Devinci
 							{ "grant_type", "client_credentials" },
 							{ "client_id", clientApp.ClientId },
 							{ "client_secret", clientApp.ClientSecret },
-							{ "scope", $"https://{_appConfig.B2CTenantName}.onmicrosoft.com/{resourceApp.Id}/.default" },
+							//{ "scope", $"https://{_appConfig.B2CTenantName}.onmicrosoft.com/{resourceApp.Id}/.default" },
+							//{ "scope", clientApp.Scope }
+							//{ "scope", "api://8vc6mkgd-6001.use.devtunnels.ms/240e5704-1d77-474b-919a-c02c19683e64/.default" }
+							{ "scope", "https://dyvenix.com/auth/.default" }
 						});
 
-					var response = await httpClient.SendAsync(request);
-					response.EnsureSuccessStatusCode();
+					request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/x-www-form-urlencoded");
 
+					var response = await httpClient.SendAsync(request);
 					string content = await response.Content.ReadAsStringAsync();
+
+					if (response.StatusCode != HttpStatusCode.OK) {
+						txtDecodedToken.Text = content;
+						throw new Exception($"Status code: {response.StatusCode}");
+					}
+					
 					var respObj = JsonSerializer.Deserialize<TokenResponse>(content);
 					string accessToken = respObj.AccessToken;
 
@@ -81,13 +89,11 @@ namespace Devinci
 					Clipboard.SetText(txtToken.Text);
 
 					txtDecodedToken.Text = DecodeToken(accessToken);
-				}
-				catch (Exception ex)
-				{
+
+				} catch (Exception ex) {
 					txtToken.Text = $"Error:{Environment.NewLine}{ex.Message}";
-				}
-				finally
-				{
+
+				} finally {
 					this.Cursor = Cursors.Default;
 				}
 			}));
@@ -139,17 +145,12 @@ namespace Devinci
 			// Window size/position
 
 			var x = Settings.Default.Size;
-			if (Settings.Default.Maximized)
-			{
+			if (Settings.Default.Maximized) {
 				Location = Settings.Default.Location;
 				WindowState = FormWindowState.Maximized;
-			}
-			else if (Settings.Default.Maximized)
-			{
+			} else if (Settings.Default.Maximized) {
 				// Don't save minimized state
-			}
-			else
-			{
+			} else {
 				Location = Settings.Default.Location;
 				Size = Settings.Default.Size;
 			}
@@ -166,17 +167,12 @@ namespace Devinci
 			Settings.Default.MRU_AppIdx = cmbClientApps.SelectedIndex;
 			Settings.Default.MRU_ApiIdx = cmbResourceApps.SelectedIndex;
 
-			if (WindowState == FormWindowState.Maximized)
-			{
+			if (WindowState == FormWindowState.Maximized) {
 				Settings.Default.Location = this.Location;
 				Settings.Default.Maximized = true;
-			}
-			else if (WindowState == FormWindowState.Minimized)
-			{
+			} else if (WindowState == FormWindowState.Minimized) {
 				// Ignore minimized state
-			}
-			else
-			{
+			} else {
 				Settings.Default.Location = this.Location;
 				Settings.Default.Size = this.Size; //new Size(this.Width, this.Height);
 				Settings.Default.Maximized = false;
@@ -193,31 +189,24 @@ namespace Devinci
 
 		private void btnValidateToken_Click(object sender, EventArgs e)
 		{
-			if (txtToken.Text.Length == 0)
-			{
+			if (txtToken.Text.Length == 0) {
 				MessageBox.Show("No token.");
 				return;
 			}
 
 			var accessToken = txtToken.Text;
 
-			this.BeginInvoke(new Action(async () =>
-			{
+			this.BeginInvoke(new Action(async () => {
 				this.Cursor = Cursors.WaitCursor;
-				try
-				{
+				try {
 					//var jwtValidator = new JwtValidator();
 					//var validatedToken = await JwtValidator.ValidateTokenAsync(accessToken, "us-east-1", _appConfig.UserPoolId, _appConfig.ClientId);
 
 					txtToken.Text = null;
 					//validatedToken.Claims.ToList().ForEach(c => txtToken.Text += $"{c.Type} : {c.Value}{Environment.NewLine}");
-				}
-				catch (Exception ex)
-				{
+				} catch (Exception ex) {
 					MessageBox.Show($"Error:{Environment.NewLine}{ex.Message}", "Token Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-				}
-				finally
-				{
+				} finally {
 					this.Cursor = Cursors.Default;
 				}
 			}));
